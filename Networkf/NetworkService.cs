@@ -13,7 +13,7 @@ namespace Networkf {
 			Log(string.Format(format, args));
 		}
 
-		public const int KBufferSize = 2048, KLengthFieldSize = 2, KCrc32FieldSize = 4, KContentMaxSize = KBufferSize - KLengthFieldSize - KCrc32FieldSize;
+		public const int KBufferSize = 4096, KLengthFieldSize = 2, KCrc32FieldSize = 4, KContentMaxSize = KBufferSize - KLengthFieldSize - KCrc32FieldSize;
 		public ParseMessageDelegate parseMessage;
 
 		public readonly int id;
@@ -86,19 +86,36 @@ namespace Networkf {
 					break;
 				}
 
-				if (parseMessage != null) {
-					int messageI = KLengthFieldSize;
-					var message = parseMessage(bufferRev, ref messageI);
-					if (messageI != i - KCrc32FieldSize) {
-						Log("\t\terror: message used {0}, expecting {1}", messageI, i - KCrc32FieldSize);
-						break;
+				try {
+					if (parseMessage != null) {
+						int messageI = KLengthFieldSize;
+						var message = parseMessage(bufferRev, ref messageI);
+						if (messageI != i - KCrc32FieldSize) {
+							Log("\t\terror: message used {0}, expecting {1}", messageI, i - KCrc32FieldSize);
+							break;
+						}
+						Log("\t\treceived message type {0}", message.type);
+
+						if (OnMessageReceived != null) {
+							OnMessageReceived(id, message);
+						}
 					}
-					Log("\t\treceived message type {0}", message.type);
-					
-					if (OnMessageReceived != null) {
-						OnMessageReceived(id, message);
-					}
+				} catch (System.Exception e) {
+					Log(e.Message);
+					break;
 				}
+
+			}
+
+			TeardownService();
+		}
+
+		public void TeardownService() {
+			try {
+				socket.Shutdown(SocketShutdown.Both);
+				socket.Close();
+			} catch (System.Exception e) {
+				Log(e.Message);
 			}
 
 			if (OnServiceTeardown != null) {
